@@ -67,7 +67,7 @@ apd_props <- apd_props_cmp()
 anz_vs_aus <- rbind(apd_props, anz_props)
 
 library(ggpattern)
-pA <- ggplot(anz_vs_aus, aes(y = prop / 100, x = bmi_bin, fill = sex, pattern = loc)) +
+pA <- ggplot(anz_vs_aus, aes(y = prop / 100, x = bmi_bins, fill = sex, pattern = loc)) +
   geom_col_pattern(linewidth = 1,
                    position = position_dodge(preserve = "single"),
                    color = "black", 
@@ -127,7 +127,7 @@ cat(
          spec_dec(dat$lw, 2), ", ", spec_dec(dat$up, 2), "]"), sep = "\n"
 )
 
-pB <- ggplot(dat, aes(x = bmi_bin, y = avg / prop, color = sex, group = sex)) +
+pB <- ggplot(dat, aes(x = bmi_bins, y = avg / prop, color = sex, group = sex)) +
   geom_line() + geom_point() +
   geom_ribbon(aes(ymin = (avg - 1.96 * stdev) / prop, 
                   ymax = (avg + 1.96 * stdev) / prop,
@@ -140,12 +140,12 @@ pB <- ggplot(dat, aes(x = bmi_bin, y = avg / prop, color = sex, group = sex)) +
 
 cowplot::plot_grid(pA, pB, ncol = 2L, labels = c("(A)", "(B)"))
 
-ggsave(file.path(root, "results", "Figure2.png"), width = 15, height = 6)
+ggsave(file.path(root, "results", "Figure1.png"), width = 15, height = 6)
 
-#' * proportion of the paradox explained *
-irisk <- dat[, c("sex", "bmi_bins", "irr"), with=FALSE]
-irisk <- setnames(irisk, "bmi_bins", "bmi_bin")
-irisk[, bmi_bin := as.factor(bmi_bin)]
-irisk$bmi_bin <- relevel(irisk$bmi_bin, ref = "[18.5-25] kg/m^2")
-save(irisk, file = file.path(root, "data", "inverse_rr.rda"))
+#' #' * proportion of the paradox explained *
+#' irisk <- dat[, c("sex", "bmi_bins", "irr"), with=FALSE]
+#' irisk <- setnames(irisk, "bmi_bins", "bmi_bin")
+#' irisk[, bmi_bin := as.factor(bmi_bin)]
+#' irisk$bmi_bin <- relevel(irisk$bmi_bin, ref = "[18.5-25] kg/m^2")
+#' save(irisk, file = file.path(root, "data", "inverse_rr.rda"))
 

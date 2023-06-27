@@ -1,4 +1,92 @@
 
+weight_anzics_cb <- function(x, ...) {
+  
+  height <- x$HEIGHT
+  weight <- x$WEIGHT
+  age <- x$AGE
+  
+  height2 <- height
+  weight2 <- weight
+  weight[which(height2 < 100)] <- height2[which(height2 < 100)]
+  height[which(height2 < 100)] <- weight2[which(height2 < 100)]
+  weight2[which(weight2 == 0)] <- NA
+  height2[which(weight2 == 0)] <- NA
+  height[which(height == 0)] <- NA
+  height[which(height > 250)] <- NA
+  height[which(height < 30)] <- NA
+  height[which(height < 50 & age > 5)] <- NA
+  height[which(height < 100 & age > 10)] <- NA
+  weight[which(weight == 0)] <- NA
+  weight[which(weight > 350)] <- NA
+  weight[which(weight > 200 & height < 120)] <- NA
+  weight[which(weight < 20 & age > 10)] <- NA
+  weight[which(weight < 10 & age > 5)] <- NA
+  
+  x[, WEIGHT := weight]
+  
+  x[, c(id_vars(x), "WEIGHT"), with=FALSE]
+}
+
+height_anzics_cb <- function(x, ...) {
+  
+  height <- x$HEIGHT
+  weight <- x$WEIGHT
+  age <- x$AGE
+  
+  height2 <- height
+  weight2 <- weight
+  weight[which(height2 < 100)] <- height2[which(height2 < 100)]
+  height[which(height2 < 100)] <- weight2[which(height2 < 100)]
+  weight2[which(weight2 == 0)] <- NA
+  height2[which(weight2 == 0)] <- NA
+  height[which(height == 0)] <- NA
+  height[which(height > 250)] <- NA
+  height[which(height < 30)] <- NA
+  height[which(height < 50 & age > 5)] <- NA
+  height[which(height < 100 & age > 10)] <- NA
+  weight[which(weight == 0)] <- NA
+  weight[which(weight > 350)] <- NA
+  weight[which(weight > 200 & height < 120)] <- NA
+  weight[which(weight < 20 & age > 10)] <- NA
+  weight[which(weight < 10 & age > 5)] <- NA
+  
+  x[, HEIGHT := height]
+  
+  x[, c(id_vars(x), "HEIGHT"), with=FALSE]
+}
+
+anzics_adm_type_cb <- function(adm, elective, ...) {
+  
+  adm_type <- function(adm, elective) {
+    ifelse(
+      adm == "med", "med", ifelse(elective, "elective_surgery", "emergency_surgery")
+    )
+  }
+  res <- merge(adm, elective, all = TRUE)
+  res[, adm_type := adm_type(adm, elective)]
+  res[, c(id_vars(res), "adm_type"), with=FALSE]
+}
+
+is_chr_cb <- function(cmbd_anzics, ...) {
+  
+  cmbd_anzics[, is_chr := cmbd_anzics > 0]
+  cmbd_anzics[, c(id_vars(cmbd_anzics), "is_chr"), with=FALSE]
+}
+
+is_vent_cb <- function(...) {
+  
+  res <- Reduce(function(x, y) merge(x, y, all = TRUE), list(...)[1:3])
+  res[, is_vent := is_invasive > 0 | is_invasive2 > 0 | is_noninvasive > 0]
+  res[is.na(is_vent), is_vent := FALSE]
+  res[, c(id_vars(res), "is_vent"), with=FALSE]
+}
+
+anzics_diab_cb <- function(x, ...) {
+  
+  x[, DIABETES := DIABETES != 5]
+  x
+}
+
 cmbd_anzics_cb <- function(...) {
   
   res <- Reduce(function(x, y) merge(x, y, all = TRUE), list(...)[1:13])
@@ -30,7 +118,7 @@ miiv_elix_dir <- function(x, ...) {
   ch[, list(icd_code = sum(cmb, na.rm = TRUE)), by = c(id_vars(ch))]
 }
 
-wmiiv_charlson_dir <- function(x, ...) {
+miiv_charlson_dir <- function(x, ...) {
 
   ch9 <- icd9_comorbid_charlson(x[icd_version == 9])
   ch10 <- icd10_comorbid_charlson(x[icd_version == 10])
@@ -130,6 +218,7 @@ pci_or_death_callback <- function(pci, death, ...) {
   
   x <- merge(pci, death, all = TRUE)
   x[, pci_or_death := death | pci]
+  x[is.na(pci_or_death), pci_or_death := FALSE]
   x[, c(id_vars(x), "pci_or_death"), with=FALSE]
 }
 
@@ -141,8 +230,7 @@ pci_callback <- function(los_icu, ...) {
 
 anzics_adm <- function(x, val_var, ...) {
   
-  diag_to_adm <- function(x) ifelse(is.na(x) | x == 0,
-                                    "other", ifelse(x < 1200, "med", "surg"))
+  diag_to_adm <- function(x) ifelse(x < 1200, "med", "surg")
   
   x[, adm := diag_to_adm(get(val_var))]
   x[, c(val_var) := NULL]

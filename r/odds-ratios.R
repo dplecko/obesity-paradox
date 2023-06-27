@@ -2,52 +2,70 @@
 
 #' * First step - load *
 load_data <- function(src = "anzics", coh = "bmi", 
-                      bmi_bins = c("who", "who_adjust"),
+                      bmi_bins = c("who", "who-adjust", "who-obese"),
+                      outcome = c("death", "pci", "pci_or_death"),
                       ref_bin = "[18.5-25] kg/m^2",
-                      add_pci = FALSE, age_match = TRUE,
-                      reverse_risk = FALSE) {
+                      add_pci = FALSE, age_match = FALSE,
+                      reverse_risk = FALSE,
+                      bmi_cts = FALSE) {
   
-  bmi_bins <- match.arg(bmi_bins, c("who", "who_adjust"))
+  bmi_bins <- match.arg(bmi_bins, c("who", "who-adjust", "who-obese"))
+  outcome <- match.arg(outcome, c("death", "pci", "pci_or_death"))
   
-  if (add_pci) {
-    cat("Death outcome merged with persistent critical illness...(!)\n")
-    ind <- load_concepts(c("bmi_all", "pci_or_death", "sex", "age"), 
+  if (file.exists(file.path(root, "cache", paste0(src, coh, ".rda")))) {
+    
+    load(file.path(root, "cache", paste0(src, coh, ".rda")))
+  } else {
+    
+    ind <- load_concepts(c("bmi_all", "pci_or_death", "pci", "death", "sex", "age"), 
                          src, patient_ids = config("cohort")[[src]][[coh]],
                          verbose = FALSE)
-    ind <- rename_cols(ind, "death", "pci_or_death")
-  } else {
     
-    ind <- load_concepts(c("bmi_all", "death", "sex", "age"), src,
-                         patient_ids = config("cohort")[[src]][[coh]],
-                         verbose = FALSE)
-    ind[, c(index_var(ind)) := NULL]
+    if (is_ts_tbl(ind)) ind[, c(index_var(ind)) := NULL]
+
+    ind[is.na(death), death := FALSE]
+    ind[is.na(pci), pci := FALSE]
+    ind[is.na(pci_or_death), pci_or_death := FALSE]
+    
+    if (!is.element(src, c("anzics", "sic"))) {
+      
+      ils <- load_concepts("sofa", src, explicit_wins = hours(24L), 
+                           keep_components = TRUE,
+                           verbose = FALSE)
+      ils[, c(index_var(ils), "sofa") := NULL]
+      ind <- merge(ind, ils, all.x = TRUE)
+      ind <- replace_na(ind, val = 0, type = "const")
+    } else if (src == "anzics") {
+      
+      ils <- load_concepts(c("apache_iii_risk", "apache_iii_diag"), src,
+                           verbose = FALSE)
+      ind <- merge(ind, ils, all.x = TRUE)
+      ind <- replace_na(ind, 0, vars = "apache_iii_diag")
+      risk_med <- median(ind$apache_iii_risk, na.rm = TRUE) # compute median
+      ind[is.na(apache_iii_risk), apache_iii_risk := risk_med] # impute median
+      age_med <- median(ind$age, na.rm = TRUE)
+      ind[is.na(age), age := age_med]
+      ind[, apache_iii_diag := as.factor(apache_iii_diag)]
+    } else if (src == "sic") {
+      
+      ils <- load_concepts("saps3", src)
+      ind <- merge(ind, ils, all.x = TRUE)
+      risk_med <- median(ind$saps3, na.rm = TRUE) # compute median
+      ind[is.na(saps3), saps3 := risk_med] # impute median
+    }
+    
+    if (src %in% c("mimic_demo", "mimic", "miiv", "aumc")) {
+      dgs <- load_concepts("diag", src, verbose = FALSE)
+      ind <- merge(ind, dgs, all.x = TRUE)
+      ind <- replace_na(ind, val = "OTH", vars = "diag")
+    }
+    
+    save(ind, file = file.path(root, "cache", paste0(src, coh, ".rda")))
   }
   
-  ind <- ind[!is.na(bmi_all) & !is.na(sex)]
-  ind[is.na(death), death := FALSE]
-  
-  if (src != "anzics") {
-    
-    ils <- load_concepts("sofa", src, explicit_wins = hours(24L), 
-                         keep_components = TRUE,
-                         verbose = FALSE)
-    ils[, c(index_var(ils), "sofa") := NULL]
-    ind <- merge(ind, ils, all.x = TRUE)
-    ind <- replace_na(ind, val = 0, type = "const")
-  } else {
-    
-    ils <- load_concepts(c("apache_iii_risk", "apache_iii_diag"), src,
-                         verbose = FALSE)
-    ind <- merge(ind, ils, all.x = TRUE)
-    risk_med <- median(ind$apache_iii_risk, na.rm = TRUE) # compute median
-    ind[is.na(apache_iii_risk), apache_iii_risk := risk_med] # impute median
-    ind[, apache_iii_diag := as.factor(apache_iii_diag)]
-  }
-  
-  if (src %in% c("mimic_demo", "mimic", "miiv", "aumc")) {
-    dgs <- load_concepts("diag", src, verbose = FALSE)
-    ind <- merge(ind, dgs, all.x = TRUE)
-  }
+  not_outcome <- setdiff(c("death", "pci", "pci_or_death"), outcome)
+  ind[, c(not_outcome) := NULL]
+  ind <- rename_cols(ind, "outcome", outcome)
   
   if (any(is.na(ind))) {
     
@@ -56,18 +74,21 @@ load_data <- function(src = "anzics", coh = "bmi",
     ind <- ind[complete.cases(ind)]
   }
   
-  breaks <- c(0, config("bmi-bins")[[bmi_bins]], Inf)
-  # tags <- paste("<", breaks[-1])
-  ind[, bmi_bin := factor(.bincode(bmi_all, breaks),
-                          labels = bin_labels(config("bmi-bins")[[bmi_bins]], 
-                                              "kg/m^2"))]
-  
-  ind$bmi_bin <- relevel(ind$bmi_bin, ref = ref_bin)
+  if (!bmi_cts) {
+    
+    breaks <- c(0, config("bmi-bins")[[bmi_bins]], Inf)
+    # tags <- paste("<", breaks[-1])
+    ind[, bmi_bin := factor(.bincode(bmi_all, breaks),
+                            labels = bin_labels(config("bmi-bins")[[bmi_bins]], 
+                                                "kg/m^2"))]
+    
+    ind$bmi_bin <- relevel(ind$bmi_bin, ref = ref_bin)
+  }
   
   ind$sex <- factor(ind$sex)
   ind$sex <- relevel(ind$sex, ref = "Male")
   
-  if (is.element(src, c("mimic_demo", "mimic", "miiv")) & age_match) {
+  if (is.element(src, c("mimic_demo", "mimic", "miiv", "aumc")) & age_match) {
     
     ind <- add_age_std(ind)
     fnw <- fnw("anzics", config("cohort")[["anzics"]][["bmi"]], "icustay",
@@ -77,7 +98,7 @@ load_data <- function(src = "anzics", coh = "bmi",
     ind[, c("age_std", "weight") := NULL]
   }
   
-  ind[, c("bmi_all", id_vars(ind)) := NULL]
+  if (!bmi_cts) ind[, c("bmi_all", id_vars(ind)) := NULL]
   ind$sex <- factor(ind$sex, levels = c("Male", "Female"))
   
   if (reverse_risk) {
@@ -93,10 +114,10 @@ load_data <- function(src = "anzics", coh = "bmi",
 
 
 #' * Second step - fit logistic models *
-fit_log <- function(dat, type = c("univar", "multivar", "manual"), ref_bin,
+fit_log <- function(dat, type = c("univar", "multivar", "manual", "split"), ref_bin,
                     object = "fit") {
   
-  type <- match.arg(type, c("univar", "multivar", "manual"))
+  type <- match.arg(type, c("univar", "multivar", "manual", "split"))
   
   if (type == "univar") {
     
@@ -106,6 +127,16 @@ fit_log <- function(dat, type = c("univar", "multivar", "manual"), ref_bin,
     
     mod <- glm(death ~ bmi_bin * sex + ., data = dat, 
                family = "binomial", weights = attr(dat, "weights")) # !!!
+  } else if (type == "split") {
+    
+    idx <- dat$sex == "Male"
+    return(list(
+      Male = glm(death ~ ., data = dat[idx, which(names(dat) != "sex"),with=F], 
+                 family = "binomial", weights = attr(dat, "weights")[idx]),
+      Female = glm(death ~ ., data = dat[!idx, which(names(dat) != "sex"),with=F], 
+                   family = "binomial", weights = attr(dat, "weights")[!idx])
+    ))
+    
   } else {
     Y <- dat$death
     
@@ -170,8 +201,14 @@ fit_log <- function(dat, type = c("univar", "multivar", "manual"), ref_bin,
       dev_chisq_eff("bmi_bin_[18.5-25] kg/m^2:sexFemale",
                     "bmi_bin_[25-30] kg/m^2:sexFemale", df, mod_full)
       
+      dev_chisq_eff("bmi_bin_[0-18.5] kg/m^2:sexFemale",
+                    "bmi_bin_[18.5-25] kg/m^2:sexFemale", df, mod_full)
+      
       dev_chisq_eff("bmi_bin_[18.5-25] kg/m^2",
                     "bmi_bin_[25-30] kg/m^2", df, mod_full)
+      
+      dev_chisq_eff("bmi_bin_[18.5-25] kg/m^2",
+                    "bmi_bin_[0-18.5] kg/m^2", df, mod_full)
       return(NULL) 
     }
   }
@@ -220,19 +257,37 @@ plot_or.glm <- function(mod, ref_bin = "[18.5-25] kg/m^2") {
 
 plot_or.list <- function(mod, ref_bin = "[18.5-25] kg/m^2") {
   
-  se <- sqrt(diag(chol2inv(mod$qr$qr[seq_len(mod$rank), seq_len(mod$rank)])))
-  names(se) <- dimnames(mod$R)
-  
-  df <- data.frame(Estimate = coef(mod), SE = se)
-  df <- rbind(df, c(0, 0))
-  rownames(df)[length(rownames(df))] <- paste0("bmi_bin_", ref_bin)
-  df <- df[grepl("bmi_bin", rownames(df)), ]
-  df$group <- ifelse(grepl("Female", rownames(df)), "Female", "Male")
-  
-  df$bmi_bin <- gsub("bmi_bin_|:sexFemale", "", rownames(df))
-  df$bmi_bin <- factor(df$bmi_bin)
-  
-  
+  if (setequal(names(mod), c("Male", "Female"))) {
+    
+    get_coeff <- function(mod, wch) {
+      
+      res <- as.data.frame(summary(mod[[wch]])$coefficients[, c(1, 2)])
+      res <- rbind(res, c(0, 0))
+      rownames(res)[length(rownames(res))] <- paste0("bmi_bin", ref_bin)
+      res <- cbind(res, group = wch)
+      res <- res[grepl("bmi_bin", rownames(res)), ]
+      res$bmi_bin <- gsub("bmi_bin|:sexFemale", "", rownames(res))
+      res$bmi_bin <- factor(res$bmi_bin)
+      names(res) <- c("Estimate", "SE", "group", "bmi_bin")
+      res
+    }
+    
+    df <- rbind(get_coeff(mod, "Male"), get_coeff(mod, "Female"))
+  } else {
+    
+    se <- sqrt(diag(chol2inv(mod$qr$qr[seq_len(mod$rank), seq_len(mod$rank)])))
+    names(se) <- dimnames(mod$R)
+    
+    df <- data.frame(Estimate = coef(mod), SE = se)
+    df <- rbind(df, c(0, 0))
+    rownames(df)[length(rownames(df))] <- paste0("bmi_bin_", ref_bin)
+    df <- df[grepl("bmi_bin", rownames(df)), ]
+    df$group <- ifelse(grepl("Female", rownames(df)), "Female", "Male")
+    
+    df$bmi_bin <- gsub("bmi_bin_|:sexFemale", "", rownames(df))
+    df$bmi_bin <- factor(df$bmi_bin)
+  }
+  # browser()
   df$cih <- exp(df$Estimate + 1.96 * df$SE)
   df$cil <- exp(df$Estimate - 1.96 * df$SE)
   df$cic <- exp(df$Estimate)
@@ -242,11 +297,14 @@ plot_or.list <- function(mod, ref_bin = "[18.5-25] kg/m^2") {
            spec_dec(df$cil, 2), ", ", spec_dec(df$cih, 2), "]"), sep = "\n"
   )
   
-  ggplot(df, aes(x = as.integer(bmi_bin), y = exp(Estimate), color = group)) +
-    geom_point() + geom_line() + theme_bw() +
+  ggplot(df, aes(x = -0.1 + as.integer(bmi_bin) + (group == "Male") / 5, 
+                 y = exp(Estimate), color = group)) +
+    geom_point() + 
+    # geom_line() + 
+    theme_bw() +
     geom_errorbar(aes(ymin = exp(Estimate - 1.96 * SE),
                       ymax = exp(Estimate + 1.96 * SE)),
-                  linewidth = 0.75, width = 0.25) +
+                  linewidth = 0.75, width = 0.1) +
     geom_hline(yintercept = 1, color = "red", linetype = "dashed") +
     scale_x_continuous(labels = levels(df$bmi_bin), 
                        breaks = seq_along(levels(df$bmi_bin))) +

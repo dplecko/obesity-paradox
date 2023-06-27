@@ -14,7 +14,22 @@ srcwrap <- function(src) {
          mimic_demo = "MIMIC Demo",
          eicu_demo = "eICU Demo",
          anzics = "ANZICS APD",
+         sic = "SICdb",
          stop("unknown data source")
+  )
+}
+
+outwrap <- function(out) {
+  
+  if (length(out) > 1L) {
+    return(vapply(out, outwrap, character(1L)))
+  }
+  
+  switch(out,
+         death = "Death",
+         pci = "PerCI",
+         pci_or_death = "Death + PerCI",
+         stop("unknown outcome")
   )
 }
 

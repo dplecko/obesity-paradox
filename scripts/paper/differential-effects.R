@@ -3,11 +3,12 @@ root <- rprojroot::find_root(rprojroot::has_file(".gitignore"))
 r_dir <- file.path(root, "r")
 invisible(lapply(list.files(r_dir, full.names = TRUE, recursive = TRUE), source))
 
-src <- c("anzics")
+src <- "anzics" # c("sic", "anzics", "aumc", "miiv")
 cohs <- c("bmi")
-ttl <- list(bmi = "- entire cohort", bmi_5pc = "- BMI missingness < 5%")
-bmi_bins <- "who"
-ref_bin <- ifelse(bmi_bins == "who", "[18.5-25] kg/m^2", "[22.5-25] kg/m^2")
+ttl <- list(bmi = "- entire cohort", bmi_10pc = "- BMI missingness < 5%")
+bmi_bins <- "who-obese"
+ref_bin <- ifelse(bmi_bins %in% c("who", "who-obese"), "[18.5-25] kg/m^2", 
+                  "[22.5-25] kg/m^2")
 plt <- list()
 
 for (add_pci in c(FALSE, TRUE)) {
@@ -18,112 +19,43 @@ for (add_pci in c(FALSE, TRUE)) {
       
       dat <- load_data(dsrc, coh = curr_coh, bmi_bins = bmi_bins, 
                        ref_bin = ref_bin, add_pci = add_pci, age_match = TRUE)
-      mod_uni <- fit_log(dat, "univar", ref_bin = ref_bin)
-      mod_wths <- fit_log(dat, "manual", ref_bin = ref_bin,
-                          object = "within-sex")
-      mod_wthb <- fit_log(dat, "manual", ref_bin = ref_bin,
-                          object = "within-bmi")
-      print(summary(mod_wthb))
-      mod_man <- fit_log(dat, "manual", ref_bin = ref_bin)
+      # mod_uni <- fit_log(dat, "univar", ref_bin = ref_bin)
+      # mod_wths <- fit_log(dat, "manual", ref_bin = ref_bin,
+      #                     object = "within-sex")
+      # mod_wthb <- fit_log(dat, "manual", ref_bin = ref_bin,
+      #                     object = "within-bmi")
+      # print(summary(mod_wthb))
+      mod_man <- fit_log(dat, "split", ref_bin = ref_bin)
       
-      plt[[length(plt) + 1]] <- plot_or(mod_man, ref_bin = ref_bin)
+      plt[[length(plt) + 1]] <- plot_or(mod_man, ref_bin = ref_bin) + 
+        ggtitle(dsrc)
     }
   }
 }
 
 cowplot::plot_grid(plotlist = plt,
                    labels = paste0("(", LETTERS[seq_along(plt)], ")"),
-                   ncol = 2L)
+                   ncol = 2L, vjust = 2.5) # vjust = 1.5 is default
 
-ggsave(file.path(root, "results", "Figure1.png"), width = 15, height = 6)
+ggsave(file.path(root, "results", "anzics-ors.png"), width = 10, height = 6)
 
+#' * External analyses *
+ext_plt <- list()
+src1 <- "miiv"
+src2 <- "aumc"
+for (add_pci in c(FALSE, TRUE)) {
+  
+  dat1 <- load_data(src1, coh = "bmi", bmi_bins = bmi_bins, 
+                    ref_bin = ref_bin, add_pci = add_pci, age_match = TRUE)
+  dat1[, src := src1]
+  dat2 <- load_data(src2, coh = "bmi", bmi_bins = bmi_bins, 
+                    ref_bin = ref_bin, add_pci = add_pci, age_match = TRUE)
+  dat2[, src := src2]
+  mod_man <- fit_log(rbind(dat1, dat2), "manual", ref_bin = ref_bin)
+  ext_plt[[length(ext_plt) + 1]] <- plot_or(mod_man, ref_bin = ref_bin)
+}
 
-#' * differential impact of sex *
-#
-# tags <- c("<18", "<25", "<30", "<35", ">35")
-# ggplot(dat[, list(mean(death), .N), by = c("sex", "bmi_bin")],
-#        aes(x = bmi_bin, y = V1, color = sex, fill = sex)) +
-#   geom_point() + geom_line() +
-#   geom_ribbon(aes(ymin = V1 - 1.96 * V1 * (1-V1) / sqrt(N),
-#                   ymax = V1 + 1.96 * V1 * (1-V1) / sqrt(N)), alpha = 0.4) +
-#   scale_fill_discrete(guide = "none") +
-#   scale_x_continuous(labels = tags, breaks = seq_along(tags)) +
-#   theme_bw() + xlab("BMI group") + ylab("Mortality rate") +
-#   scale_y_continuous(labels = scales::percent) +
-#   theme(legend.position = c(0.8, 0.8),
-#         legend.box.background = element_rect())
-# 
-# ggsave(file.path(root, "results", "sex.png"), width = 5, height = 5)
-
-#' * differential impact of height *
-# 
-# med_height <- median(dat$height)
-# med_height_m <- median(dat[sex == "Male"]$height)
-# dat[, height_bin := height > med_height]
-# dat[, height_bin_m := height > med_height_m]
-# 
-# height_all <- ggplot(dat[, list(mean(death), .N), by = c("height_bin", "bmi_bin")],
-#                      aes(x = bmi_bin, y = V1, color = height_bin, fill = height_bin)) +
-#   geom_point() + geom_line() +
-#   geom_ribbon(aes(ymin = V1 - 1.96 * V1 * (1-V1) / sqrt(N),
-#                     ymax = V1 + 1.96 * V1 * (1-V1) / sqrt(N)), alpha = 0.4) +
-#   scale_fill_discrete(guide = "none") +
-#   scale_x_continuous(labels = tags, breaks = seq_along(tags)) +
-#   theme_bw() + xlab("BMI group") + ylab("Mortality rate") +
-#   scale_y_continuous(labels = scales::percent) +
-#   scale_color_discrete(name = "Height", labels = c("Below Median", "Above Median")) +
-#   theme(legend.position = c(0.8, 0.8),
-#         legend.box.background = element_rect()) + ggtitle("All patients")
-# 
-# height_male <- ggplot(
-#   dat[sex == "Male", list(mean(death), .N), by = c("height_bin_m", "bmi_bin")],
-#   aes(x = bmi_bin, y = V1, color = height_bin_m, fill = height_bin_m)) +
-#   geom_point() + geom_line() +
-#   geom_ribbon(aes(ymin = V1 - 1.96 * V1 * (1-V1) / sqrt(N),
-#                   ymax = V1 + 1.96 * V1 * (1-V1) / sqrt(N)), alpha = 0.4) +
-#   scale_fill_discrete(guide = "none") +
-#   scale_x_continuous(labels = tags, breaks = seq_along(tags)) +
-#   theme_bw() + xlab("BMI group") + ylab("Mortality rate") +
-#   scale_y_continuous(labels = scales::percent) +
-#   scale_color_discrete(name = "Height", labels = c("Below Median", "Above Median")) +
-#   theme(legend.position = c(0.8, 0.8),
-#         legend.box.background = element_rect()) + ggtitle("Male only")
-# 
-# cowplot::plot_grid(height_all, height_male, ncol = 2L)
-# 
-# ggsave(file.path(root, "results", "height.png"), width = 10, height = 5)
-
-#' * within BMI comorbidities *
-
-# dat[, with_norm := .bincode(bmi, c(18, 21, 25))]
-# 
-# chrl <- dat[, rowSums(.SD), .SDcols = config("charlson")[[1]]]
-# 
-# dat$charlson <- chrl
-# 
-# boot <- NULL
-# for (i in 1:100) {
-#   idx <- sample(nrow(dat), replace = TRUE)
-#   boot <- rbind(boot, dat[idx, list(chrl = mean(charlson), rep = i), by = c("bmi_bin")])
-# }
-# 
-# charlson_bin <- ggplot(boot[, list(mean(chrl), sd(chrl)), by = c("bmi_bin")],
-#        aes(x = bmi_bin, y = V1)) +
-#   geom_ribbon(aes(ymin = V1 - 1.96 * V2, ymax = V1 + 1.96 * V2), alpha = 0.4) +
-#   geom_point() + geom_line() +
-#   scale_x_continuous(labels = tags, breaks = seq_along(tags)) +
-#   theme_bw() + xlab("BMI group") + ylab("# comorbidities (Charlson)") #+
-  # scale_y_continuous(labels = scales::percent) #+
-  # scale_color_discrete(name = "Height", labels = c("Below Median", "Above Median")) +
-  # theme(legend.position = c(0.8, 0.8),
-  #       legend.box.background = element_rect())
-
-
-#' * a LOESS smoother *
-# charlson_loess <- ggplot(dat[bmi < 40 & bmi> 15], aes(x = bmi, y = charlson)) +
-#   geom_smooth() + xlab("BMI value") + ylab("# comorbidities (Charlson)") +
-#   theme_bw()
-# 
-# cowplot::plot_grid(charlson_bin, charlson_loess, ncol = 2L)
-# 
-# ggsave(file.path(root, "results", "charlson.png"), width = 10, height = 5)
+cowplot::plot_grid(plotlist = ext_plt,
+                   labels = paste0("(", LETTERS[seq_along(plt)], ")"),
+                   ncol = 2L, vjust = 2.5)
+ggsave("~/Desktop/miiv_aumc.png", height = 5, width = 12)
