@@ -37,6 +37,3 @@ source(file.path(root, "scripts", "paper", "splines-with-cis.R"))
 
 # eTable 3
 source(file.path(root, "scripts", "paper", "tables", "miiv-hosp-patient-table.R"))
-
-# Figure 3
-source(file.path(root, "scripts", "paper", "miiv-comorbidities.R"))

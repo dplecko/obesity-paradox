@@ -45,6 +45,10 @@ bmi_coh <- id_col(load_concepts(c("bmi"), "anzics", patient_ids = a_asfd,
                                 verbose = FALSE))
 cat("No BMI recorded", length(a_asfd) - length(bmi_coh), "\n")
 cat("Remaining", length(bmi_coh), "patients\n")
+print(
+  load_concepts(c("bmi", "sex"), "anzics", 
+                patient_ids = bmi_coh, verbose = FALSE)[, mean(bmi), by = "sex"]
+)
 
 # proportion with bmi
 cat("Proportion with BMI recorded",
@@ -64,9 +68,12 @@ cat("BMI missingness in the low-miss sensitivity",
     spec_dec(100 - 100 * length(bmi_10pc) / length(all_10pc), 1), "%\n")
 
 #' * MIMIC-IV filtering *
-mimic4 <- load_concepts(c("age", "sex", "adm_episode"), "miiv", verbose = FALSE)
+mimic4 <- load_concepts(c("age", "sex", "adm_episode", "diag"), "miiv", 
+                        verbose = FALSE)
 
-all_wi <- id_col(mimic4[!is.na(sex) & age >= 18 & adm_episode %in% c(0, 1)])
+all_wi <- id_col(
+  mimic4[!is.na(sex) & age >= 18 & adm_episode %in% c(0, 1) & diag != "OBS"]
+)
 miiv_bmi_coh <- id_col(load_concepts("bmi_all", "miiv", patient_ids = all_wi,
                                      verbose = FALSE))
 miiv_omr_only <- id_col(load_concepts("bmi_omr", "miiv", patient_ids = all_wi,
@@ -82,8 +89,11 @@ cmb <- load_concepts(c("sex", "age", "bmi_all"), "miiv", id_type = "patient",
 
 
 #' * SICdb filtering *
-sz <- load_concepts(c("age", "sex", "adm_episode"), "sic", verbose = FALSE)
-all_sz <- id_col(sz[!is.na(sex) & age >= 18 & adm_episode %in% c(0, 1)])
+sz <- load_concepts(c("age", "sex", "adm_episode", "surg_site"), "sic", 
+                    verbose = FALSE)
+all_sz <- id_col(
+  sz[!is.na(sex) & age >= 18 & adm_episode %in% c(0, 1) & surg_site != "Birth"]
+)
 sz_bmi <- id_col(load_concepts("bmi_all", "sic", patient_ids = all_sz, 
                                verbose = FALSE))
 

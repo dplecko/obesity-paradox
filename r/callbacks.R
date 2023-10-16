@@ -594,7 +594,7 @@ bin_bmi <- function(bmi, ...) {
   breaks <- c(-Inf, config("bmi-bins")[["who"]], Inf)
   
   bmi[, bmi_bins := factor(.bincode(bmi, breaks))]
-  levels(bmi[["bmi_bins"]]) <- bin_labels(config("bmi-bins")[["who"]], "kg/m^2")
+  levels(bmi[["bmi_bins"]]) <- bin_labels(config("bmi-bins")[["who"]], "$kg/m^2$")
   
   id_var <- id_vars(bmi)
   bmi[, c(id_var, "bmi_bins"), with = FALSE]

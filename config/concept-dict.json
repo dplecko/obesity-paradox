@@ -1,4 +1,17 @@
 {
+  "surg_site": {
+    "target": "id_tbl",
+    "sources": {
+      "sic": [
+        {
+          "table": "cases",
+          "val_var": "SurgicalSite",
+          "class": "col_itm",
+          "callback": "sic_surg_site_cb"
+        }
+      ]
+    }
+  },
   "saps3": {
     "target": "id_tbl",
     "sources": {
@@ -16,6 +29,18 @@
     "callback": "anzics_adm_type_cb",
     "class": "rec_cncpt",
     "target": "id_tbl"
+  },
+  "country": {
+    "target": "id_tbl",
+    "sources": {
+      "anzics": [
+        {
+          "table": "main",
+          "val_var": "CountryCode",
+          "class": "col_itm"
+        }
+      ]
+    }
   },
   "elective": {
     "target": "id_tbl",
@@ -309,6 +334,14 @@
           "val_var": "AP3DIAG",
           "class": "col_itm",
           "callback": "anzics_adm"
+        }
+      ],
+      "sic": [
+        {
+          "table": "cases",
+          "val_var": "SurgicalSite",
+          "class": "col_itm",
+          "callback": "sic_adm_cb"
         }
       ]
     }
@@ -696,6 +729,20 @@
     "callback": "bmi_binary",
     "class": "rec_cncpt",
     "target": "id_tbl"
+  },
+  "mech_vent": {
+    "sources": {
+      "sic": [
+        {
+          "ids": [2019],
+          "table": "data_float_h",
+          "sub_var": "DataID",
+          "dur_var": "rawdata",
+          "add_var": "cnt",
+          "callback": "sic_mv_cb"
+        }
+      ]
+    }
   },
   "is_mv": {
     "concepts": ["mech_vent"],

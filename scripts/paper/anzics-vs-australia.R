@@ -13,7 +13,7 @@ load_apd <- function() {
     am <- as.data.table(am)
     am <- am[-c(2, 3)]
     am <- setnames(am, "Measured Body Mass Index", "bmi_bins")
-    am$bmi_bins <- bin_labels(config("bmi-bins")[["who"]], "kg/m^2")
+    am$bmi_bins <- bin_labels(config("bmi-bins")[["who"]], "$kg/m^2$")
     
     for (i in seq.int(2, ncol(am))) {
       
@@ -33,8 +33,13 @@ apd <- load_apd()
 
 age_breaks <- c(18, 25, 35, 45, 55, 65, 75, 85) - 0.001
 
-anz <- load_concepts(c("bmi", "sex", "age", "bmi_bins"), "anzics",
+#' * filtering for Australia only * 
+coh <- load_concepts("country", "anzics", 
                      patient_ids = config("cohort")[["anzics"]][["bmi"]])
+coh_ids <- id_col(coh[country != "NZ"])
+
+anz <- load_concepts(c("bmi", "sex", "age", "bmi_bins"), "anzics",
+                     patient_ids = coh_ids)
 anz <- anz[complete.cases(anz)]
 
 anz[, age_group := .bincode(age, c(-Inf, age_breaks, Inf))]
@@ -84,7 +89,10 @@ pA <- ggplot(anz_vs_aus, aes(y = prop / 100, x = bmi_bins, fill = sex, pattern =
     legend.box.background = element_rect()
   ) + xlab("BMI group") + ylab("Group proportion") +
   scale_y_continuous(labels = scales::percent) +
-  scale_fill_discrete(name = "Sex")
+  scale_fill_discrete(name = "Sex") +
+  scale_x_discrete(
+    labels = do.call(c, lapply(levels(anz_vs_aus$bmi_bins), latex2exp::TeX))
+  )
 
 # baseline risk ratio plot
 # bootstrap uncertainty quantification
@@ -117,6 +125,7 @@ dat <- merge(anz_boot[, list(avg = mean(prop), stdev = sd(prop)),
                       by = c("sex", "bmi_bins")], apd_props, 
              by = c("sex", "bmi_bins"))
 
+dat[, bmi_bins := factor(bmi_bins, levels = levels(anz_boot$bmi_bins))]
 dat[, rr := avg / prop]
 dat[, up := (avg + 1.96 * stdev) / prop]
 dat[, lw := (avg - 1.96 * stdev) / prop]
@@ -132,15 +141,20 @@ pB <- ggplot(dat, aes(x = bmi_bins, y = avg / prop, color = sex, group = sex)) +
   geom_ribbon(aes(ymin = (avg - 1.96 * stdev) / prop, 
                   ymax = (avg + 1.96 * stdev) / prop,
                   fill = sex), alpha = 0.3) +
-  theme_bw() + xlab("BMI Group") + ylab("Baseline ICU Admission Risk Ratio") +
+  theme_bw() + xlab("BMI group") + ylab("Baseline ICU Admission Risk Ratio") +
   scale_fill_discrete(name = "Sex") +
   scale_color_discrete(name = "Sex") +
+  scale_x_discrete(
+    labels = do.call(c, lapply(levels(anz_vs_aus$bmi_bins), latex2exp::TeX))
+  ) +
   theme(legend.position = c(0.6, 0.6),
         legend.box.background = element_rect())
 
-cowplot::plot_grid(pA, pB, ncol = 2L, labels = c("(A)", "(B)"))
+p_ava <- cowplot::plot_grid(pA, pB, ncol = 2L, labels = c("(A)", "(B)"))
 
-ggsave(file.path(root, "results", "Figure1.png"), width = 15, height = 6)
+ggsave(file.path(root, "results", "Figure1.tiff"), 
+       plot = p_ava, width = 15, height = 6,
+       compression = "lzw")
 
 #' #' * proportion of the paradox explained *
 #' irisk <- dat[, c("sex", "bmi_bins", "irr"), with=FALSE]

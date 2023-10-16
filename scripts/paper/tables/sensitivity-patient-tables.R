@@ -22,11 +22,11 @@ vars <- list(
   ),
   bmi = list(
     concept = "bmi_bins",
-    callback = tab_design
+    callback = tab_design_np
   ),
   admission = list(
     concept = "adm",
-    callback = tab_design
+    callback = tab_design_np
   ),
   death = list(
     concept = "death",
@@ -59,7 +59,7 @@ vars <- list(
 )
 
 pts_tbl <- Reduce(
-  function(x, y) merge(x, y, by = c("Variable", "Reported"), sort = F),
+  function(x, y) merge(x, y, by = c("Variable", "Reported"), sort = F, all = TRUE),
   Map(pts_source_sens, src, cohorts)
 )
 

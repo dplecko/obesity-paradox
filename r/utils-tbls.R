@@ -2,10 +2,10 @@
 bin_labels <- function(breaks, unit, lower0 = TRUE) {
   
   x_labels <- sapply(1:(length(breaks)-1),
-                     function(x) paste0("[", breaks[x], "-", breaks[x+1], "]")
+                     function(x) paste0("", breaks[x], "-", breaks[x+1], "")
   )
   first_label <- paste0("< ", breaks[1])
-  if (lower0) first_label <- paste0("[0-", breaks[1], "]")
+  if (lower0) first_label <- paste0("0-", breaks[1], "")
   x_labels <- c(first_label, x_labels, paste0("> ", breaks[length(breaks)]))
   x_labels <- paste(x_labels, unit)
   
@@ -77,7 +77,17 @@ tab_design <- function(x, patient_ids) {
 tab_design_np <- function(x, patient_ids) {
   
   val_col <- setdiff(names(x), meta_vars(x))
-  res <- table(x[[val_col]])
+  res <- x[[val_col]]
+  
+  if (length(res) < length(patient_ids)) {
+    
+    tbres <- table(res)
+    imp_val <- names(tbres)[which.max(tbres)]
+    if (is.logical(res)) imp_val <- as.logical(imp_val)
+    res <- c(res, rep(imp_val, length(patient_ids) - length(res)))
+  }
+  
+  res <- table(res)
   labs <- names(res)
   res <- paste0(
     res, " (", round(100 * res / sum(res)), ")"
@@ -124,16 +134,54 @@ percent_fun0 <- function(x, patient_ids) {
 
 na_fun <- function(x, patient_ids) return(c(NA, NA, NA))
 
-pts_source_sum <- function(source, patient_ids, skip_reord = FALSE) {
+compute_pval <- function(x, y, cnc) {
+  
+  if (length(unique(x)) < 10) {
+    
+    p.val <- chisq.test(
+      table(
+        c(rep("Male", length(x)), rep("Female", length(y))),
+        c(x, y)
+      )
+    )$p.val
+    
+    cat(cnc, "(ChiSq) p-value =", p.val, "\n")
+  } else {
+    
+    p.val <- wilcox.test(x = x, y = y)$p.val
+    cat(cnc, "(Rank-Sum) p-value =", p.val,"\n")
+  }
+  
+  p.val
+}
+
+pts_source_sum <- function(source, patient_ids, skip_reord = FALSE, 
+                           p_vals = FALSE) {
+  
+  if (p_vals) {
+    
+    return(
+      lapply(
+        vars,
+        function(x) {
+          load_concepts(x[["concept"]], source, patient_ids = patient_ids, 
+                        keep_components = T)[[x[["concept"]]]]
+        }
+      )
+    )
+  }
   
   tbl_list <- lapply(
     vars,
-    function(x) x[["callback"]](
-      load_concepts(x[["concept"]], source, patient_ids = patient_ids, 
-                    keep_components = T), unlist(patient_ids)
-    )
+    function(x) {
+      if (x[["concept"]] == "bmi") browser()
+      x[["callback"]](
+        load_concepts(x[["concept"]], source, patient_ids = patient_ids, 
+                      keep_components = T), unlist(patient_ids)
+      )
+    }
   )
-  
+  browser()
   pts_tbl <- Reduce(rbind,
                     lapply(
                       tbl_list,
@@ -156,7 +204,8 @@ pts_source_sum <- function(source, patient_ids, skip_reord = FALSE) {
   # change the row ordering
   if (!skip_reord) {
     
-    target_ord <- c("Cohort size", "age", "death",
+    target_ord <- c("Cohort size", "age", "death", "pci", "pci_or_death", 
+                    "bmi_all",
                     grep("kg\\/m\\^2", pts_tbl$Variable, value = TRUE),
                     "med", "elective_surgery", "emergency_surgery",
                     "los_hosp", "los_icu", "diab", "is_vent", "is_chr",

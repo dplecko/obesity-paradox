@@ -27,6 +27,14 @@ vars <- list(
     concept = "death",
     callback = percent_fun1
   ),
+  pci = list(
+    concept = "pci",
+    callback = percent_fun1
+  ),
+  pci_or_death = list(
+    concept = "pci_or_death",
+    callback = percent_fun1
+  ),
   los_icu = list(
     concept = "los_icu",
     callback = med_iqr
@@ -76,3 +84,11 @@ my_doc <- my_doc %>%
   body_add_table(res, style = "table_template")
 
 print(my_doc, target = file.path(root, "tables", "Table_BMI_miss.docx"))
+
+
+p_stats <- pts_source_sum("anzics", config("cohort")[["anzics"]][["bmi"]],
+                          p_vals = TRUE)
+m_stats <- pts_source_sum("anzics", config("cohort")[["anzics"]][["bmi_miss"]],
+                          p_vals = TRUE)
+pvals <- Map(compute_pval, p_stats, m_stats, names(vars))
+

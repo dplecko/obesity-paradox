@@ -4,10 +4,10 @@
 load_data <- function(src = "anzics", coh = "bmi", 
                       bmi_bins = c("who", "who-adjust", "who-obese"),
                       outcome = c("death", "pci", "pci_or_death"),
-                      ref_bin = "[18.5-25] kg/m^2",
+                      ref_bin = "18.5-25 $kg/m^2$",
                       add_pci = FALSE, age_match = FALSE,
                       reverse_risk = FALSE,
-                      bmi_cts = FALSE) {
+                      bmi_cts = FALSE, keep_ids = FALSE) {
   
   bmi_bins <- match.arg(bmi_bins, c("who", "who-adjust", "who-obese"))
   outcome <- match.arg(outcome, c("death", "pci", "pci_or_death"))
@@ -48,7 +48,7 @@ load_data <- function(src = "anzics", coh = "bmi",
       ind[, apache_iii_diag := as.factor(apache_iii_diag)]
     } else if (src == "sic") {
       
-      ils <- load_concepts("saps3", src)
+      ils <- load_concepts(c("saps3", "surg_site"), src)
       ind <- merge(ind, ils, all.x = TRUE)
       risk_med <- median(ind$saps3, na.rm = TRUE) # compute median
       ind[is.na(saps3), saps3 := risk_med] # impute median
@@ -78,11 +78,11 @@ load_data <- function(src = "anzics", coh = "bmi",
     
     breaks <- c(0, config("bmi-bins")[[bmi_bins]], Inf)
     # tags <- paste("<", breaks[-1])
-    ind[, bmi_bin := factor(.bincode(bmi_all, breaks),
-                            labels = bin_labels(config("bmi-bins")[[bmi_bins]], 
-                                                "kg/m^2"))]
+    ind[, bmi_bins := factor(.bincode(bmi_all, breaks),
+                             labels = bin_labels(config("bmi-bins")[[bmi_bins]], 
+                                                "$kg/m^2$"))]
     
-    ind$bmi_bin <- relevel(ind$bmi_bin, ref = ref_bin)
+    ind$bmi_bins <- relevel(ind$bmi_bins, ref = ref_bin)
   }
   
   ind$sex <- factor(ind$sex)
@@ -98,6 +98,7 @@ load_data <- function(src = "anzics", coh = "bmi",
     ind[, c("age_std", "weight") := NULL]
   }
   
+  if (keep_ids) return(ind)
   if (!bmi_cts) ind[, c("bmi_all", id_vars(ind)) := NULL]
   ind$sex <- factor(ind$sex, levels = c("Male", "Female"))
   

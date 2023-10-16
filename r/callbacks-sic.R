@@ -1,4 +1,84 @@
 
+sic_adm_cb <- function(x, ...) {
+  
+  x[, SurgicalSite := NULL]
+  x[, SurgicalSite := "surg"]
+}
+
+sic_surg_site_cb <- function(x, ...) {
+  
+  category_list <- list(
+    Abdomen = c(
+      2211, # Abdomen: Unterer GI-Trakt
+      2219, # Abdomen: Oberer GI-Trakt (inkl. Jejunum)
+      2225, # Abdomen: Leber-Chriurgie
+      2242, # Abdomen: Pankreas
+      2253, # Abdomen: Biliärtrakt
+      2259  # Abdomen: endokrine Chirurgie
+    ),
+    Vascular = c(
+      2214, # Gefäß: Aortenchirurgie
+      2234, # Gefäß: Karotischirurgie
+      2243, # Gefäß: große Gefäße (Thorax und Bauch)
+      2258, # Gefäß: Andere
+      2229  # Gefäß: periphere Gefäße
+    ),
+    Heart = c(
+      2227, # Herz: CABG
+      2237, # Herz: Klappe mit CABG
+      2240, # Herz: Klappe
+      2241  # Herz: Andere
+    ),
+    Trauma_Orthopedics = c(
+      2231, # Trauma: SHT
+      2246, # Trauma: Extremitäten
+      2269, # Trauma: Abdomen (Assuming Abdominal trauma)
+      2254, # Trauma: Thorax (Assuming Thoracic trauma)
+      2239, # Trauma: Polytrauma
+      2207  # Extremitäten-Chirurgie
+    ),
+    Neuro = c(
+      2245, # Neurochirurgie: zerebrovaskulär
+      2250, # Neurochirurgie: Wirbelsäule
+      2264, # Neurochirurgie: Andere
+      2273  # Neurochirurgie: intrakranieller Tumor
+    ),
+    Transplant = c(
+      2268, # Transplantation: Leber
+      2270, # Transplantation: Herz/Lunge
+      2271, # Transplantation: Andere
+      2272  # Transplantation: Herz
+    ),
+    Gynecological = c(2260), # Gynäkologischer Eingriff
+    Birth = c(2261),         # Geburtshilfe
+    Other = c(
+      2205, # Unknown
+      2221, # .
+      2217, # HNO
+      2210, # Kieferchirurgie (Oral / Maxilofacial)
+      2232  # Andere Eingriffe
+    ),
+    Thorax = c(
+      2262, # Thorax: Lobektomie
+      2263, # Thorax: Pneumonektomie
+      2267, # Thorax: Pleura
+      2226  # Thorax: Andere
+    )
+  )
+  
+  site_map <- do.call(
+    rbind,
+    Map(
+      function(site, nums) {
+        data.table(site = site, SurgicalSite = nums)
+      }, names(category_list), category_list
+    )
+  )
+  
+  x <- merge(x, site_map, by = "SurgicalSite")
+  x[, SurgicalSite := NULL]
+  rename_cols(x, "SurgicalSite", "site")
+}
 
 sic_omr_bmi_cb <- function(x, ...) {
   
